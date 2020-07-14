@@ -1,0 +1,49 @@
+# version 2020.1
+
+name: Build Python wheel for Alpine Linux
+
+on:
+  push:
+    branches:
+      - master
+  release:
+    types:
+      - published
+
+jobs:
+
+  build:
+    name: Build Python wheel for Alpine Linux
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v2
+      - name: Run build script in Alpine container
+        run: docker-compose run -T build
+      - name: Get file name and sha256 of asset
+        id: asset
+        run: |
+          echo "::set-output name=package_name::$(awk -F '==' '{ print $1 }' requirements.txt)"
+          echo "::set-output name=filename::$(ls *.whl)"
+          echo "::set-output name=sha256::$(shasum -a 256 *.whl | awk '{ print $1 }')"
+      - name: Show sha256 of asset
+        run: shasum -a 256 ${{ github.workspace }}/${{ steps.asset.outputs.filename }}
+      - name: Upload asset to release
+        id: upload
+        if: github.event_name == 'release'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          asset_content_type: application/octet-stream
+          asset_path: ${{ github.workspace }}/${{ steps.asset.outputs.filename }}
+          asset_name: ${{ steps.asset.outputs.filename }}
+          upload_url: ${{ github.event.release.upload_url }}
+      - name: Send repository dispatch to package index
+        if: github.event_name == 'release'
+        uses: peter-evans/repository-dispatch@v1
+        with:
+          token: ${{ secrets.DISPATCH_TOKEN }}
+          repository: alpine-wheels/index
+          event-type: add_file
+          client-payload: '{"package_name": "${{ steps.asset.outputs.package_name }}", "href": "${{ steps.upload.outputs.browser_download_url }}", "hash_name": "sha256", "hash_value": "${{ steps.asset.outputs.sha256 }}"}'

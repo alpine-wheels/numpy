@@ -1,0 +1,13 @@
+# template version 2020.1
+
+version: '3.8'
+
+services:
+  build:
+    image: python:3.8.4-alpine3.12
+    working_dir: /workspace
+    entrypoint:
+      - /bin/sh
+      - build.sh
+    volumes:
+     - ./:/workspace
